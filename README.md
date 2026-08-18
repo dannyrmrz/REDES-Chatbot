@@ -34,6 +34,8 @@ assignment allows.
 | `mcp_host/transport.py` | Framing. `StdioTransport` runs a server as a child process and exchanges one JSON object per line |
 | `mcp_host/mcp_client.py` | The MCP session: handshake, tool discovery, tool invocation |
 | `mcp_host/interaction_log.py` | Transcript of **every** message sent to and received from the servers |
+| `mcp_host/chat_engine.py` | LLM connection and session context, shared by all frontends |
+| `cli.py` | Terminal chatbot |
 
 ### The MCP handshake, as implemented
 
@@ -70,8 +72,38 @@ key never reaches the repository.
 
 ## Usage
 
-The chatbot itself arrives in the next milestone. What can be run today is the smoke
-test that proves the hand-written client against a real official MCP server:
+### Chatbot
+
+```powershell
+python cli.py
+```
+
+Ask anything, or use a command:
+
+| Command | Effect |
+| --- | --- |
+| `/log` | show every interaction with the MCP servers |
+| `/reset` | clear the conversation context |
+| `/help` | list the commands |
+| `/exit` | quit (Ctrl+C also works) |
+
+The context is what makes a conversation work: ask *"Who was Alan Turing?"* and then
+*"When was he born?"*, and the second question is answered about Turing, because the
+full history travels with every request.
+
+```
+You: Who was Alan Turing?
+Assistant: Alan Turing was a British mathematician and logician ...
+
+You: When was he born?
+Assistant: He was born on 23 June 1912 in London.
+```
+
+The model defaults to `claude-opus-5`; set `ANTHROPIC_MODEL` in `.env` to use another one.
+
+### MCP smoke test
+
+This proves the hand-written client against a real official MCP server:
 
 ```powershell
 python scripts/smoke_stdio.py
@@ -95,7 +127,8 @@ list_directory -> [FILE] hello.txt
 ## Project layout
 
 ```
-mcp_host/          the MCP host library (JSON-RPC, transports, client, log)
+cli.py             terminal chatbot
+mcp_host/          the host library (JSON-RPC, transports, MCP client, log, chat engine)
 scripts/           runnable checks and utilities
 logs/              interaction logs written at runtime (ignored by git)
 ```
