@@ -47,6 +47,8 @@ class ServerRegistry:
                     # Paths written as "./x" are relative to the config file.
                     args=[_resolve(arg, base) for arg in entry.get("args", [])],
                     env=entry.get("env"),
+                    # Needed by servers started as a Python module.
+                    cwd=_resolve(entry["cwd"], base) if entry.get("cwd") else None,
                 ),
                 log=log,
             )

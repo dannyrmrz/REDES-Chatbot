@@ -37,6 +37,7 @@ assignment allows.
 | `mcp_host/server_registry.py` | Runs several MCP servers at once and merges their tools into one catalogue |
 | `mcp_host/chat_engine.py` | LLM connection, session context and the tool-use loop |
 | `cli.py` | Terminal chatbot |
+| `clinic_server/` | Our own MCP server: clinic appointments, the server half of the protocol |
 
 ### The MCP handshake, as implemented
 
@@ -123,9 +124,34 @@ change.
 | --- | --- | --- |
 | Filesystem (official) | `npx -y @modelcontextprotocol/server-filesystem ./workspace` | 14 |
 | Git (official) | `python -m mcp_server_git` | 12 |
+| Clinic (ours) | `python -m clinic_server` | 6 |
 
-Both are sandboxed to `workspace/`, which git ignores, so the chatbot can never
-touch this repository.
+The two official ones are sandboxed to `workspace/`, which git ignores, so the
+chatbot can never touch this repository.
+
+### Clinic server (ours)
+
+An industry use case: booking appointments at a medical clinic. It publishes six
+tools — `list_specialties`, `find_doctors`, `get_availability`, `book_appointment`,
+`get_appointment` and `cancel_appointment` — over the same stdio transport as the
+official servers, because it implements the same hand-written protocol.
+
+```
+You: Necesito una cita con un pediatra el 20 de agosto por la manana
+
+  [tool] clinic__find_doctors {"specialty": "pediatrics"}
+  [tool] clinic__get_availability {"doctor_id": "doc-004", "date": "2026-08-20"}
+
+Assistant: Dr. Pablo Estrada tiene libre 08:00, 09:00 y 10:00. A que hora te sirve?
+```
+
+Full reference — parameters, return values, errors and raw JSON-RPC examples — in
+**[docs/clinic-server.md](docs/clinic-server.md)**. It can also run on its own for
+testing:
+
+```powershell
+python -m clinic_server
+```
 
 ### Demo scenario
 
@@ -178,7 +204,9 @@ list_directory -> [FILE] hello.txt
 
 ```
 cli.py             terminal chatbot
+clinic_server/     our own MCP server (clinic appointments)
 config/            MCP server declarations
+docs/              specifications of the servers we wrote
 mcp_host/          the host library (JSON-RPC, transports, MCP client, log, chat engine)
 scripts/           runnable checks and utilities
 workspace/         sandbox the MCP servers operate on (ignored by git)

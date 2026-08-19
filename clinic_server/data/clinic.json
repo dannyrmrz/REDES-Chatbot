@@ -1,0 +1,33 @@
+{
+  "clinic": {
+    "name": "Clinica Vida Sana",
+    "city": "Guatemala City",
+    "timezone": "America/Guatemala"
+  },
+  "specialties": [
+    {"id": "cardiology",  "name": "Cardiologia",  "description": "Heart and blood vessel conditions."},
+    {"id": "dermatology", "name": "Dermatologia", "description": "Skin, hair and nail conditions."},
+    {"id": "pediatrics",  "name": "Pediatria",    "description": "Medical care for children and teenagers."},
+    {"id": "traumatology","name": "Traumatologia","description": "Bones, joints and sports injuries."}
+  ],
+  "doctors": [
+    {"id": "doc-001", "name": "Dra. Elena Marroquin", "specialty": "cardiology",
+     "office": "A-201", "days": ["monday", "wednesday", "friday"],
+     "hours": ["08:00", "09:00", "10:00", "11:00"]},
+    {"id": "doc-002", "name": "Dr. Ricardo Alvarado", "specialty": "cardiology",
+     "office": "A-203", "days": ["tuesday", "thursday"],
+     "hours": ["13:00", "14:00", "15:00"]},
+    {"id": "doc-003", "name": "Dra. Sofia Herrera", "specialty": "dermatology",
+     "office": "B-105", "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+     "hours": ["09:00", "10:00", "11:00"]},
+    {"id": "doc-004", "name": "Dr. Pablo Estrada", "specialty": "pediatrics",
+     "office": "C-010", "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+     "hours": ["08:00", "09:00", "10:00", "14:00", "15:00"]},
+    {"id": "doc-005", "name": "Dra. Ana Lucia Perez", "specialty": "pediatrics",
+     "office": "C-012", "days": ["wednesday", "thursday", "friday"],
+     "hours": ["13:00", "14:00", "16:00"]},
+    {"id": "doc-006", "name": "Dr. Mario Contreras", "specialty": "traumatology",
+     "office": "D-301", "days": ["monday", "thursday"],
+     "hours": ["07:00", "08:00", "09:00", "10:00"]}
+  ]
+}

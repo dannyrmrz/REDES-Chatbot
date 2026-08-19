@@ -11,6 +11,7 @@ venv/
 # Runtime artefacts
 logs/
 workspace/
+clinic_server/data/appointments.json
 .pytest_cache/
 
 # OS / editors
