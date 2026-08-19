@@ -10,6 +10,7 @@ venv/
 
 # Runtime artefacts
 logs/
+workspace/
 .pytest_cache/
 
 # OS / editors

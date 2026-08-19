@@ -6,18 +6,20 @@ Layers, from the wire upwards:
 * :mod:`mcp_host.transport`       -- framing (stdio today, HTTP later)
 * :mod:`mcp_host.mcp_client`      -- the MCP handshake and tool calls
 * :mod:`mcp_host.interaction_log` -- transcript of everything exchanged
-* :mod:`mcp_host.chat_engine`     -- LLM connection and session context
+* :mod:`mcp_host.server_registry` -- several MCP servers as one tool catalogue
+* :mod:`mcp_host.chat_engine`     -- LLM connection, context and tool-use loop
 """
 
 from .chat_engine import ChatEngine
 from .interaction_log import RECEIVED, SENT, InteractionLog, LogEntry
 from .jsonrpc import JsonRpcError
 from .mcp_client import MCPClient
+from .server_registry import ServerRegistry
 from .transport import StdioTransport, Transport, TransportError
 
 __all__ = [
     "InteractionLog", "LogEntry", "SENT", "RECEIVED",
     "JsonRpcError", "MCPClient",
     "Transport", "StdioTransport", "TransportError",
-    "ChatEngine",
+    "ChatEngine", "ServerRegistry",
 ]

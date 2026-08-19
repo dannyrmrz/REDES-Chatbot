@@ -8,6 +8,7 @@ Type a question to talk to the model, or a slash command (see /help).
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -15,6 +16,11 @@ import anthropic
 from dotenv import load_dotenv
 
 from mcp_host import ChatEngine, InteractionLog
+from mcp_host.server_registry import ServerRegistry
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+CONFIG = os.path.join(ROOT, "config", "servers.json")
+WORKSPACE = os.path.join(ROOT, "workspace")
 
 BANNER = """
 
@@ -26,6 +32,7 @@ Type your question, or /help for the commands.
 HELP = """
 Commands:
   /log     show every interaction with the MCP servers
+  /tools   list the connected servers and their tools
   /reset   clear the conversation context
   /help    show this help
   /exit    quit (Ctrl+C also works)
@@ -50,6 +57,8 @@ def run_command(command: str, engine: ChatEngine, log: InteractionLog) -> bool:
         print(HELP)
     elif command == "/log":
         print(log.render())
+    elif command == "/tools":
+        print(engine.registry.describe() if engine.registry else "(no servers)")
     elif command == "/reset":
         engine.reset()
         print("Context cleared.")
@@ -78,25 +87,35 @@ def main() -> int:
         print(MISSING_KEY)
         return 1
 
+    os.makedirs(WORKSPACE, exist_ok=True)  # the filesystem server needs it
     log = InteractionLog()
-    engine = ChatEngine(log)
-    print(BANNER)
-    print(f"Model: {engine.model}\n")
 
-    while True:
-        try:
-            entry = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nBye.")
-            return 0
-        if not entry:
-            continue
-        if entry.startswith("/"):
-            if not run_command(entry, engine, log):
-                print("Bye.")
+    print(BANNER)
+    registry = ServerRegistry.from_config(CONFIG, log)
+    print("Connecting to the MCP servers (the first run downloads them)...")
+    for name, status in registry.connect().items():
+        print(f"  {name}: {status}")
+
+    engine = ChatEngine(log, registry=registry)
+    print(f"\nModel: {engine.model}   Tools available: {len(registry.tool_specs())}\n")
+
+    try:
+        while True:
+            try:
+                entry = input("You: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nBye.")
                 return 0
-        else:
-            ask(engine, entry)
+            if not entry:
+                continue
+            if entry.startswith("/"):
+                if not run_command(entry, engine, log):
+                    print("Bye.")
+                    return 0
+            else:
+                ask(engine, entry)
+    finally:
+        registry.close()  # stop the server subprocesses
 
 
 if __name__ == "__main__":

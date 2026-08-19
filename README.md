@@ -34,7 +34,8 @@ assignment allows.
 | `mcp_host/transport.py` | Framing. `StdioTransport` runs a server as a child process and exchanges one JSON object per line |
 | `mcp_host/mcp_client.py` | The MCP session: handshake, tool discovery, tool invocation |
 | `mcp_host/interaction_log.py` | Transcript of **every** message sent to and received from the servers |
-| `mcp_host/chat_engine.py` | LLM connection and session context, shared by all frontends |
+| `mcp_host/server_registry.py` | Runs several MCP servers at once and merges their tools into one catalogue |
+| `mcp_host/chat_engine.py` | LLM connection, session context and the tool-use loop |
 | `cli.py` | Terminal chatbot |
 
 ### The MCP handshake, as implemented
@@ -51,7 +52,7 @@ assignment allows.
 
 - Python 3.11 or newer
 - Node.js 18 or newer — only to run the official MCP servers through `npx`
-- An Anthropic API key (needed from the next milestone onwards)
+- An Anthropic API key
 
 ## Installation
 
@@ -64,7 +65,14 @@ python -m venv .venv
 pip install -r requirements.txt
 
 Copy-Item .env.example .env       # then edit .env and paste your API key
+
+pip install -r requirements-servers.txt   # the official Git MCP server
+python scripts/init_workspace.py          # create the demo sandbox
 ```
+
+`requirements-servers.txt` is kept separate on purpose: those packages are the
+official servers we talk to, not part of this implementation. The Filesystem
+server needs no install, `npx` downloads it the first time the chatbot starts.
 
 Get the API key at <https://console.anthropic.com/> → *Settings* → *API keys*. New
 accounts include free credits and no card is required. `.env` is ignored by git, so the
@@ -83,6 +91,7 @@ Ask anything, or use a command:
 | Command | Effect |
 | --- | --- |
 | `/log` | show every interaction with the MCP servers |
+| `/tools` | list the connected servers and their tools |
 | `/reset` | clear the conversation context |
 | `/help` | list the commands |
 | `/exit` | quit (Ctrl+C also works) |
@@ -100,6 +109,47 @@ Assistant: He was born on 23 June 1912 in London.
 ```
 
 The model defaults to `claude-opus-5`; set `ANTHROPIC_MODEL` in `.env` to use another one.
+
+### MCP servers
+
+At startup the chatbot connects to every server listed in
+[`config/servers.json`](config/servers.json) and offers all their tools to the model.
+Tool names are prefixed with their server (`filesystem__write_file`,
+`git__git_commit`) so the model knows what it is calling and two servers can expose
+the same tool name without clashing. Adding a server is a config entry, not a code
+change.
+
+| Server | Runs as | Tools |
+| --- | --- | --- |
+| Filesystem (official) | `npx -y @modelcontextprotocol/server-filesystem ./workspace` | 14 |
+| Git (official) | `python -m mcp_server_git` | 12 |
+
+Both are sandboxed to `workspace/`, which git ignores, so the chatbot can never
+touch this repository.
+
+### Demo scenario
+
+Ask the chatbot, in one message:
+
+> Write a README.md in workspace/demo-repo describing this project, then stage it
+> and commit it with a sensible message.
+
+It answers by chaining tools across both servers, printing each call as it goes:
+
+```
+  [tool] filesystem__write_file {"path": "...\demo-repo\README.md", ...}
+  [tool] git__git_add {"repo_path": "...\demo-repo", "files": ["README.md"]}
+  [tool] git__git_commit {"repo_path": "...\demo-repo", "message": "Add README"}
+
+Assistant: I created README.md, staged it and committed it as 75a7b4d.
+```
+
+`/log` then shows every JSON-RPC message behind those three lines.
+
+**Note on creating repositories.** The official Git MCP server publishes no
+`git_init` tool in any released version, so the demo repository is created once by
+`scripts/init_workspace.py`. Everything after that — writing files, staging,
+committing, reading the log — goes through the MCP servers.
 
 ### MCP smoke test
 
@@ -128,7 +178,9 @@ list_directory -> [FILE] hello.txt
 
 ```
 cli.py             terminal chatbot
+config/            MCP server declarations
 mcp_host/          the host library (JSON-RPC, transports, MCP client, log, chat engine)
 scripts/           runnable checks and utilities
+workspace/         sandbox the MCP servers operate on (ignored by git)
 logs/              interaction logs written at runtime (ignored by git)
 ```

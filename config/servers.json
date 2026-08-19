@@ -1,0 +1,19 @@
+{
+  "_comment": "MCP servers used by the host. Paths starting with ./ are resolved relative to this file.",
+  "servers": [
+    {
+      "name": "filesystem",
+      "description": "Official Anthropic Filesystem MCP server (Node, via npx).",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "../workspace"],
+      "enabled": true
+    },
+    {
+      "name": "git",
+      "description": "Official Anthropic Git MCP server (Python module).",
+      "command": "python",
+      "args": ["-m", "mcp_server_git"],
+      "enabled": true
+    }
+  ]
+}
