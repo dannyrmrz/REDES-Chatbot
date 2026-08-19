@@ -1,5 +1,5 @@
 {
-  "_comment": "MCP servers used by the host. Paths starting with ./ are resolved relative to this file.",
+  "_comment": "MCP servers used by the host. Paths starting with ./ are resolved relative to this file. ${VARS} in urls come from .env.",
   "servers": [
     {
       "name": "filesystem",
@@ -17,11 +17,18 @@
     },
     {
       "name": "clinic",
-      "description": "Our own MCP server: medical clinic appointment booking.",
+      "description": "Our own MCP server over stdio: clinic appointment booking.",
       "command": "python",
       "args": ["-m", "clinic_server"],
       "cwd": "./..",
       "enabled": true
+    },
+    {
+      "name": "clinic-remote",
+      "description": "The same clinic server, deployed to the cloud over HTTP. Set CLINIC_REMOTE_URL in .env and flip enabled to true.",
+      "transport": "http",
+      "url": "${CLINIC_REMOTE_URL}",
+      "enabled": false
     }
   ]
 }

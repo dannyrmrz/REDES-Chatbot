@@ -14,13 +14,18 @@ the same protocol — hand-written JSON-RPC 2.0, no MCP SDK.
 
 ## Running it
 
-| Mode | Command |
-| --- | --- |
-| Through the chatbot | `python cli.py` (declared in `config/servers.json`) |
-| Standalone, for testing | `python -m clinic_server` |
+The same server runs over two transports. The MCP session is identical in both;
+only the framing changes.
 
-Started standalone it waits for JSON-RPC messages on stdin. It is a subprocess, not
-a network service: the host launches it and speaks over the pipes.
+| Mode | Command | Transport |
+| --- | --- | --- |
+| Through the chatbot | `python cli.py` (declared in `config/servers.json`) | stdio |
+| Standalone, for testing | `python -m clinic_server` | stdio |
+| Local HTTP | `python -m clinic_server.http_server` | http |
+| Deployed | Render web service | http |
+
+Over stdio it is a subprocess: the host launches it and speaks over the pipes.
+Over HTTP it is a network service listening on a port.
 
 ## Transport and framing
 
@@ -31,6 +36,36 @@ a network service: the host launches it and speaks over the pipes.
 - `stderr` — diagnostics, ignored by the protocol
 
 Messages must not contain raw newlines, which is why they are serialised compactly.
+
+## HTTP endpoints
+
+Used by the remote deployment (`clinic_server/http_server.py`).
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/mcp` | Carries one JSON-RPC message in the body |
+| `GET` | `/health` | Health check, returns server info as JSON |
+| `GET` | `/` | Same as `/health` |
+
+Status codes chosen on purpose, because they map to the JSON-RPC message classes
+and are visible in a packet capture:
+
+| Status | Meaning |
+| --- | --- |
+| `200` | A request was answered; the body is the JSON-RPC response |
+| `202` | A notification was accepted; there is no body, because none is expected |
+| `400` | The body was not valid JSON-RPC; the body carries a `-32700` error |
+| `404` | Unknown path |
+
+Requests carry `Content-Type: application/json`, and the connection is HTTP/1.1
+keep-alive, so a whole MCP session travels over one TCP connection.
+
+Call it by hand with `curl.exe` (in PowerShell plain `curl` is an alias of
+`Invoke-WebRequest`, which does not take these flags):
+
+```bash
+curl.exe -X POST https://your-service.onrender.com/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"
+```
 
 ## Protocol methods
 
@@ -206,14 +241,44 @@ Note the successful response with `isError`, as opposed to a malformed request:
 <-- {"jsonrpc":"2.0","id":6,"error":{"code":-32601,"message":"unknown method 'does/not/exist'"}}
 ```
 
+## Deploying to Render
+
+The repository already contains [`render.yaml`](../render.yaml).
+
+1. Push the repository to GitHub.
+2. On <https://render.com>, sign in with GitHub and grant access to the repository.
+3. **New > Blueprint**, pick the repository, and Render reads `render.yaml`:
+   it builds with `python --version` (the server needs no dependencies) and starts
+   `python -m clinic_server.http_server`.
+4. Wait for the deploy to finish and copy the service URL,
+   `https://<name>.onrender.com`.
+5. Check it answers: open `https://<name>.onrender.com/health` in a browser.
+6. In `.env`, set `CLINIC_REMOTE_URL=https://<name>.onrender.com/mcp`.
+7. In `config/servers.json`, set `"enabled": true` on the `clinic-remote` entry.
+
+Run `python cli.py` again and the chatbot connects to the remote server exactly as
+it does to the local one, with the tools prefixed `clinic-remote__`.
+
+Notes about the free plan:
+
+- The service sleeps after about 15 minutes without traffic, and the next request
+  wakes it up, which can take close to a minute. `HttpTransport` therefore uses a
+  60 second timeout.
+- Appointments booked remotely live in the container filesystem and are lost when
+  the service restarts. That is acceptable here: the point is the protocol, not
+  the persistence.
+
 ## Source layout
 
 | File | Responsibility |
 | --- | --- |
 | `clinic_server/server.py` | Protocol: tool schemas, message dispatch, stdio loop |
 | `clinic_server/store.py` | Domain: doctors, availability rules, appointments |
-| `clinic_server/__main__.py` | Entry point for `python -m clinic_server` |
+| `clinic_server/__main__.py` | Entry point for `python -m clinic_server` (stdio) |
+| `clinic_server/http_server.py` | The same server over HTTP, for the deployment |
 | `clinic_server/data/clinic.json` | Catalogue |
 
 The split is deliberate: `store.py` holds the clinic rules and knows nothing about
-JSON-RPC, so the same logic backs the remote HTTP deployment without changes.
+JSON-RPC, and `server.py` handles messages without knowing how they arrived. That
+is why the HTTP deployment reuses both without a single change to either: it only
+replaces the framing.

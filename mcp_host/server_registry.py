@@ -15,7 +15,7 @@ import os
 
 from .interaction_log import InteractionLog
 from .mcp_client import MCPClient
-from .transport import StdioTransport
+from .transport import HttpTransport, StdioTransport
 
 #: Separator between the server name and the tool name.
 SEPARATOR = "__"
@@ -42,14 +42,7 @@ class ServerRegistry:
                 continue
             registry.clients[entry["name"]] = MCPClient(
                 name=entry["name"],
-                transport=StdioTransport(
-                    command=entry["command"],
-                    # Paths written as "./x" are relative to the config file.
-                    args=[_resolve(arg, base) for arg in entry.get("args", [])],
-                    env=entry.get("env"),
-                    # Needed by servers started as a Python module.
-                    cwd=_resolve(entry["cwd"], base) if entry.get("cwd") else None,
-                ),
+                transport=_build_transport(entry, base),
                 log=log,
             )
         return registry
@@ -113,6 +106,21 @@ class ServerRegistry:
                 summary = (tool.get("description") or "").split("\n")[0][:70]
                 lines.append(f"  {name}{SEPARATOR}{tool['name']:<26} {summary}")
         return "\n".join(lines)
+
+
+def _build_transport(entry: dict, base: str):
+    """Build the transport a server entry asks for; stdio unless it says http."""
+    if entry.get("transport") == "http":
+        # ${VARIABLE} in the url lets the deployed address live in .env.
+        return HttpTransport(os.path.expandvars(entry["url"]))
+    return StdioTransport(
+        command=entry["command"],
+        # Paths written as "./x" are relative to the config file.
+        args=[_resolve(arg, base) for arg in entry.get("args", [])],
+        env=entry.get("env"),
+        # Needed by servers started as a Python module.
+        cwd=_resolve(entry["cwd"], base) if entry.get("cwd") else None,
+    )
 
 
 def _resolve(arg: str, base: str) -> str:

@@ -16,6 +16,8 @@ import queue
 import shutil
 import subprocess
 import threading
+import urllib.error
+import urllib.request
 from collections import deque
 
 from . import jsonrpc
@@ -139,3 +141,63 @@ class StdioTransport(Transport):
             self._process.kill()
         finally:
             self._process = None
+
+
+class HttpTransport(Transport):
+    """MCP over HTTP: each JSON-RPC message is the body of one POST.
+
+    Used for the clinic server once it is deployed to the cloud. The MCP
+    session stays the same (initialize, initialized, tools/list, tools/call);
+    only the framing changes, which is exactly what the Wireshark capture is
+    meant to show.
+
+    A request gets a JSON body back (HTTP 200). A notification expects no
+    answer, so the server replies 202 with no body and nothing is queued.
+    """
+
+    def __init__(self, url: str, timeout: float = 60.0) -> None:
+        self.url = url
+        # Cloud free tiers sleep when idle, so the first call can be slow.
+        self.timeout = timeout
+        self._incoming: queue.Queue[dict] = queue.Queue()
+
+    def start(self) -> None:
+        """Nothing to launch: the server is already running somewhere else."""
+
+    def send(self, message: dict) -> None:
+        body = jsonrpc.encode(message).encode("utf-8")
+        request = urllib.request.Request(
+            self.url,
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json",
+                     "Accept": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                payload = response.read().decode("utf-8").strip()
+        except urllib.error.HTTPError as exc:
+            # An MCP endpoint answers errors with a JSON-RPC error object;
+            # anything else means we are not talking to one (wrong url, proxy,
+            # cloud error page), which is worth saying plainly.
+            payload = exc.read().decode("utf-8", "replace").strip()
+            try:
+                self._incoming.put(jsonrpc.decode(payload))
+                return
+            except jsonrpc.JsonRpcError:
+                raise TransportError(
+                    f"HTTP {exc.code} from {self.url}: {payload[:120]}") from None
+        except urllib.error.URLError as exc:
+            raise TransportError(f"could not reach {self.url}: {exc.reason}") from exc
+
+        if payload:
+            self._incoming.put(jsonrpc.decode(payload))
+
+    def receive(self, timeout: float) -> dict:
+        try:
+            return self._incoming.get(timeout=timeout)
+        except queue.Empty:
+            raise TransportError(f"no answer from {self.url} after {timeout}s") from None
+
+    def close(self) -> None:
+        """Stateless: there is no connection of our own to tear down."""

@@ -31,7 +31,7 @@ assignment allows.
 | Module | Responsibility |
 | --- | --- |
 | `mcp_host/jsonrpc.py` | JSON-RPC 2.0 messages: builders, wire encoding, parsing, classification |
-| `mcp_host/transport.py` | Framing. `StdioTransport` runs a server as a child process and exchanges one JSON object per line |
+| `mcp_host/transport.py` | Framing. `StdioTransport` runs a server as a child process; `HttpTransport` posts each message to a remote server |
 | `mcp_host/mcp_client.py` | The MCP session: handshake, tool discovery, tool invocation |
 | `mcp_host/interaction_log.py` | Transcript of **every** message sent to and received from the servers |
 | `mcp_host/server_registry.py` | Runs several MCP servers at once and merges their tools into one catalogue |
@@ -125,6 +125,7 @@ change.
 | Filesystem (official) | `npx -y @modelcontextprotocol/server-filesystem ./workspace` | 14 |
 | Git (official) | `python -m mcp_server_git` | 12 |
 | Clinic (ours) | `python -m clinic_server` | 6 |
+| Clinic remote (ours) | Render web service over HTTP | 6 |
 
 The two official ones are sandboxed to `workspace/`, which git ignores, so the
 chatbot can never touch this repository.
@@ -152,6 +153,23 @@ testing:
 ```powershell
 python -m clinic_server
 ```
+
+### The same server, remote
+
+The clinic server runs over two transports without changing a line of its logic:
+stdio when the host launches it as a subprocess, HTTP when it lives in the cloud.
+Only the framing differs — a line on a pipe becomes the body of a POST.
+
+```powershell
+python -m clinic_server.http_server     # local, http://127.0.0.1:8000/mcp
+```
+
+Deployed on Render with the included [`render.yaml`](render.yaml), the chatbot
+reaches it by setting `CLINIC_REMOTE_URL` in `.env` and enabling the
+`clinic-remote` entry in `config/servers.json`. Its tools then appear as
+`clinic-remote__book_appointment` and are used exactly like the local ones.
+Step-by-step instructions are in
+[docs/clinic-server.md](docs/clinic-server.md#deploying-to-render).
 
 ### Demo scenario
 
@@ -204,8 +222,9 @@ list_directory -> [FILE] hello.txt
 
 ```
 cli.py             terminal chatbot
-clinic_server/     our own MCP server (clinic appointments)
+clinic_server/     our own MCP server (clinic appointments, stdio and http)
 config/            MCP server declarations
+render.yaml        blueprint that deploys the clinic server to Render
 docs/              specifications of the servers we wrote
 mcp_host/          the host library (JSON-RPC, transports, MCP client, log, chat engine)
 scripts/           runnable checks and utilities

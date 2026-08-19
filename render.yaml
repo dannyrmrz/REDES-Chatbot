@@ -1,0 +1,12 @@
+# Render blueprint for the remote clinic MCP server.
+# Create the service from the Render dashboard with "New > Blueprint".
+services:
+  - type: web
+    name: clinic-mcp-server
+    runtime: python
+    plan: free
+    region: oregon
+    # The server only uses the standard library, so there is nothing to install.
+    buildCommand: python --version
+    startCommand: python -m clinic_server.http_server
+    healthCheckPath: /health
