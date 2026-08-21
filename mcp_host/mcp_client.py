@@ -1,13 +1,4 @@
 """MCP client: one connection to one MCP server, implemented by hand.
-
-The client performs the three exchanges the protocol requires:
-
-1. ``initialize``               request/response  -- version + capability handshake
-2. ``notifications/initialized`` notification     -- the session is now live
-3. ``tools/list`` / ``tools/call`` request/response -- discovery and invocation
-
-Everything travels as JSON-RPC 2.0 built in :mod:`mcp_host.jsonrpc`, and every
-message is handed to the :class:`~mcp_host.interaction_log.InteractionLog`.
 """
 
 from __future__ import annotations

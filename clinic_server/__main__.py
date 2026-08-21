@@ -1,9 +1,3 @@
-"""Entry point: `python -m clinic_server` speaks MCP over stdio.
-
-The host launches this as a child process. You can also pipe JSON-RPC messages
-into it by hand to try it out; see docs/clinic-server.md.
-"""
-
 from __future__ import annotations
 
 import sys

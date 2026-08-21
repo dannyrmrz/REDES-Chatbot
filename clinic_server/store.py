@@ -2,11 +2,6 @@
 
 Kept apart from the protocol layer in :mod:`clinic_server.server`, so the rules
 below can be read (and tested) without thinking about JSON-RPC.
-
-Two JSON files, no database:
-
-* ``data/clinic.json``       the catalogue (specialties and doctors), read only
-* ``data/appointments.json`` the booked appointments, created on first write
 """
 
 from __future__ import annotations

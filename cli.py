@@ -12,8 +12,8 @@ import json
 import os
 import sys
 
-import anthropic
 from dotenv import load_dotenv
+from google.genai import errors as genai_errors
 
 from mcp_host import ChatEngine, InteractionLog
 from mcp_host.server_registry import ServerRegistry
@@ -39,9 +39,9 @@ Commands:
 """
 
 MISSING_KEY = """
-ANTHROPIC_API_KEY is not set.
+GEMINI_API_KEY is not set.
 
-  1. Get a key at https://console.anthropic.com/ - Settings - API keys
+  1. Get a key at https://aistudio.google.com/apikey (free tier, no card needed)
   2. Copy .env.example to .env
   3. Paste the key into .env
 
@@ -67,23 +67,37 @@ def run_command(command: str, engine: ChatEngine, log: InteractionLog) -> bool:
     return True
 
 
+def show_tool(name: str, arguments: dict) -> None:
+    """Progress line printed before each tool call the model makes."""
+    print(f"  [tool] {name} {json.dumps(arguments, ensure_ascii=False)[:90]}")
+
+
 def ask(engine: ChatEngine, question: str) -> None:
     """Send one question and print the answer, reporting API errors clearly."""
     try:
-        print(f"\nAssistant: {engine.send(question)}\n")
-    except anthropic.AuthenticationError:
-        print("\nError: the API key was rejected. Check ANTHROPIC_API_KEY in .env\n")
-    except anthropic.RateLimitError:
-        print("\nError: rate limited or out of credit. Wait and try again.\n")
-    except anthropic.APIStatusError as exc:
-        print(f"\nAPI error {exc.status_code}: {exc.message}\n")
-    except anthropic.APIConnectionError:
-        print("\nError: could not reach the API. Check your connection.\n")
+        print(f"\nAssistant: {engine.send(question, on_tool=show_tool)}\n")
+    except genai_errors.ClientError as exc:
+        # 4xx means the request was ours to get right.
+        if exc.code in (401, 403):
+            print("\nError: the API key was rejected. Check GEMINI_API_KEY in .env\n")
+        elif exc.code == 429:
+            print("\nError: free tier quota reached. Wait a minute and try again.\n")
+        else:
+            print(f"\nAPI error {exc.code}: {exc.message}\n")
+    except genai_errors.ServerError as exc:
+        print(f"\nThe API is having trouble ({exc.code}). Try again shortly.\n")
+    except genai_errors.APIError as exc:
+        print(f"\nAPI error: {exc}\n")
 
 
 def main() -> int:
+    # Windows consoles default to a legacy codepage, which turns Spanish
+    # accents into mojibake. The conversation is in Spanish, so force UTF-8.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
     load_dotenv()  # reads .env into the environment
-    if not os.getenv("ANTHROPIC_API_KEY"):
+    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
         print(MISSING_KEY)
         return 1
 

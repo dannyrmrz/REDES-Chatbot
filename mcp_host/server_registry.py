@@ -2,10 +2,6 @@
 
 The servers are declared in `config/servers.json`, so adding one (the clinic
 server, later) never means touching this code.
-
-Tool names are prefixed with their server ("filesystem__read_file") for two
-reasons: the model can tell which server it is calling, and two servers may
-expose the same tool name without clashing.
 """
 
 from __future__ import annotations
@@ -68,20 +64,23 @@ class ServerRegistry:
 
     # -- tools ------------------------------------------------------------ #
     def _build_specs(self) -> list[dict]:
-        """Translate MCP tool definitions into the shape the LLM API expects."""
+        """Collect every tool, named after the server that owns it.
+
+        The shape stays provider neutral on purpose: the chat engine is the
+        only place that knows how a given LLM wants tools declared.
+        """
         specs = []
         for name, client in self.clients.items():
             for tool in client.tools:
                 specs.append({
                     "name": f"{name}{SEPARATOR}{tool['name']}",
                     "description": tool.get("description", ""),
-                    # MCP calls it inputSchema; the Messages API input_schema.
-                    "input_schema": tool.get("inputSchema", {"type": "object"}),
+                    "schema": tool.get("inputSchema", {"type": "object"}),
                 })
         return specs
 
     def tool_specs(self) -> list[dict]:
-        """Every tool of every connected server, ready to send to the model."""
+        """Every tool of every connected server, as MCP describes them."""
         return self._specs
 
     def call(self, qualified_name: str, arguments: dict) -> dict:

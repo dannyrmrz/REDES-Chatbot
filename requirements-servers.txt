@@ -1,12 +1,1 @@
-# Official MCP servers the host talks to.
-#
-# These are NOT part of our implementation: they are third-party programs we
-# drive over the wire, so their own dependencies (mcp-server-git pulls in the
-# `mcp` SDK) never touch the protocol code in mcp_host/, which is stdlib only.
-#
-#   pip install -r requirements-servers.txt
 mcp-server-git>=2026.8.18
-
-# The Filesystem server is a Node package; npx downloads it on demand, so
-# there is nothing to install here:
-#   npx -y @modelcontextprotocol/server-filesystem <directory>

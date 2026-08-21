@@ -10,14 +10,15 @@ Course project for **CC3067 Redes**, Universidad del Valle de Guatemala.
 The MCP protocol is **implemented by hand on top of JSON-RPC 2.0**. No MCP library or
 SDK (`mcp`, `FastMCP`, ...) is used: every `initialize`, `notifications/initialized`,
 `tools/list` and `tools/call` message is built, serialised and parsed by the code in
-this repository. The official Anthropic SDK is used only to reach the LLM, which the
-assignment allows.
+this repository. Google's SDK is used only to reach the LLM, which the assignment allows: it
+implements the Gemini API, not MCP. Swapping the LLM provider touches one module,
+`mcp_host/chat_engine.py`, and nothing in the protocol layer.
 
 ## Architecture
 
 ```
                 +---------------------------+
-   you  <-->    |  chatbot host (this repo)  |  <-->  Claude API (LLM)
+   you  <-->    |  chatbot host (this repo)  |  <-->  Gemini API (LLM)
                 +---------------------------+
                       |          |
              JSON-RPC 2.0 over stdio / HTTP
@@ -35,7 +36,7 @@ assignment allows.
 | `mcp_host/mcp_client.py` | The MCP session: handshake, tool discovery, tool invocation |
 | `mcp_host/interaction_log.py` | Transcript of **every** message sent to and received from the servers |
 | `mcp_host/server_registry.py` | Runs several MCP servers at once and merges their tools into one catalogue |
-| `mcp_host/chat_engine.py` | LLM connection, session context and the tool-use loop |
+| `mcp_host/chat_engine.py` | LLM connection, session context, tool-use loop and schema translation |
 | `cli.py` | Terminal chatbot |
 | `clinic_server/` | Our own MCP server: clinic appointments, the server half of the protocol |
 
@@ -53,7 +54,7 @@ assignment allows.
 
 - Python 3.11 or newer
 - Node.js 18 or newer — only to run the official MCP servers through `npx`
-- An Anthropic API key
+- A Gemini API key (free tier, no card needed)
 
 ## Installation
 
@@ -75,9 +76,10 @@ python scripts/init_workspace.py          # create the demo sandbox
 official servers we talk to, not part of this implementation. The Filesystem
 server needs no install, `npx` downloads it the first time the chatbot starts.
 
-Get the API key at <https://console.anthropic.com/> → *Settings* → *API keys*. New
-accounts include free credits and no card is required. `.env` is ignored by git, so the
-key never reaches the repository.
+Get the API key at <https://aistudio.google.com/apikey>: sign in with a Google
+account, accept the terms and click *Create API key*. The free tier covers this
+project and asks for no credit card. `.env` is ignored by git, so the key never
+reaches the repository.
 
 ## Usage
 
@@ -109,7 +111,8 @@ You: When was he born?
 Assistant: He was born on 23 June 1912 in London.
 ```
 
-The model defaults to `claude-opus-5`; set `ANTHROPIC_MODEL` in `.env` to use another one.
+The model defaults to `gemini-3.7-flash`, which the free tier covers; set
+`GEMINI_MODEL` in `.env` to use another one.
 
 ### MCP servers
 
@@ -170,6 +173,30 @@ reaches it by setting `CLINIC_REMOTE_URL` in `.env` and enabling the
 `clinic-remote__book_appointment` and are used exactly like the local ones.
 Step-by-step instructions are in
 [docs/clinic-server.md](docs/clinic-server.md#deploying-to-render).
+
+### From MCP tools to LLM functions
+
+The two sides do not agree on how a tool is described, so the chat engine
+translates. MCP servers publish full JSON Schema; Gemini accepts only a subset of
+OpenAPI. Across the 32 tools we connect, the schemas use `$schema`, `title`,
+`default`, `minItems` and `anyOf`, none of which Gemini takes.
+
+`to_gemini_schema()` drops the unsupported keywords and collapses `anyOf`, which
+is how MCP servers spell an optional parameter:
+
+```jsonc
+// git__git_log, as the MCP server publishes it
+{"anyOf": [{"type": "string"}, {"type": "null"}], "default": null,
+ "title": "Start Timestamp", "description": "Start timestamp for filtering..."}
+
+// the same parameter, as Gemini accepts it
+{"type": "string", "nullable": true,
+ "description": "Start timestamp for filtering..."}
+```
+
+The registry stays provider neutral — it hands over tools exactly as MCP
+describes them — and only the chat engine knows the provider's dialect. That is
+why changing the LLM is a one-module change.
 
 ### Demo scenario
 

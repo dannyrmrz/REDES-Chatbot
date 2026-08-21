@@ -1,10 +1,4 @@
 """MCP server for the clinic: the server half of the protocol, written by hand.
-
-It reuses :mod:`mcp_host.jsonrpc`, the same module the client uses, which is
-the point: one hand-written JSON-RPC implementation serves both ends.
-
-Transport is stdio, exactly as the official servers use it: one JSON message
-per line on stdin/stdout, with stderr free for diagnostics.
 """
 
 from __future__ import annotations

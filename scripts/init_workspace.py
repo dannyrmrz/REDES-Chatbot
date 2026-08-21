@@ -1,11 +1,4 @@
 """Prepare the sandbox the MCP servers operate on.
-
-The official Git MCP server exposes no `git_init` tool (checked across every
-released version), so the demo repository has to exist before the chatbot can
-add and commit inside it. This script creates it once.
-
-Usage:
-    python scripts/init_workspace.py
 """
 
 from __future__ import annotations

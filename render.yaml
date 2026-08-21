@@ -1,5 +1,3 @@
-# Render blueprint for the remote clinic MCP server.
-# Create the service from the Render dashboard with "New > Blueprint".
 services:
   - type: web
     name: clinic-mcp-server
