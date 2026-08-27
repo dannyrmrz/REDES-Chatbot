@@ -74,9 +74,21 @@ Los valores de retorno, los errores y ejemplos de JSON-RPC crudo están en
 
 ---
 
-## 2. Análisis de la comunicación con Wireshark 
+## 2. Análisis de la comunicación con Wireshark
 
-### Cómo reproducir la captura
+Se hicieron dos capturas de la misma sesión MCP, porque cada una muestra algo
+que la otra no puede:
+
+| | Captura local | Captura remota |
+| --- | --- | --- |
+| Archivo | `captura-local.pcapng` | `captura-remota.pcapng` |
+| Servidor | `127.0.0.1:8000` | `clinic-mcp-server.onrender.com:443` |
+| Interfaz | Adapter for loopback traffic capture | Wi-Fi |
+| Cifrado | Ninguno, el JSON se lee directo | TLS 1.3, descifrado con `SSLKEYLOGFILE` |
+| Tramas totales | 921 | 730 |
+| Qué aporta | El JSON-RPC en texto plano | La ruta de red real: MAC, IP pública, TTL |
+
+### Cómo se reprodujo
 
 El script [`scripts/capture_session.py`](../scripts/capture_session.py) ejecuta
 una sesión MCP fija y ordenada. No se usa el chatbot a propósito: el modelo
@@ -84,105 +96,150 @@ decide qué llamar y cuándo, lo que vuelve la captura difícil de leer. Con el
 script, cada paquete tiene un lugar conocido en el protocolo.
 
 ```powershell
-# 1. Levantar el servidor (local, texto plano)
-python -m clinic_server.http_server
-
-# 2. En Wireshark: capturar en la interfaz correspondiente con el filtro
-#    tcp.port == 8000 && http
-
-# 3. Ejecutar la sesión
+# Local
+python -m clinic_server.http_server        # filtro: tcp port 8000
 python scripts/capture_session.py
+
+# Remota
+$env:SSLKEYLOGFILE="...\tls-keys.log"      # filtro: host 216.24.57.7 and tcp port 443
+python scripts/capture_session.py https://clinic-mcp-server.onrender.com/mcp
 ```
 
-Contra el servidor desplegado se usa la URL remota:
+Para leer el tráfico remoto hay que definir `SSLKEYLOGFILE` **antes** de correr
+el script: Python escribe ahí las llaves de sesión TLS, y Wireshark las usa en
+*Edit → Preferences → Protocols → TLS → (Pre)-Master-Secret log filename*. Sin
+ese paso, los paquetes aparecen como `Application Data` ilegible.
 
-```powershell
-python scripts/capture_session.py https://<servicio>.onrender.com/mcp
-```
+### Clasificación de los mensajes JSON-RPC
 
-### Clasificación de los mensajes JSON-RPC 
+Esta es la correspondencia real entre paquetes de la captura remota y mensajes
+del protocolo. La columna *trama* es el número de paquete en Wireshark.
 
-Esta es la salida real del script contra el servidor.
+| Trama | t (s) | Dirección | Puerto origen | Bytes | HTTP | Mensaje | Clase |
+| ---: | ---: | --- | ---: | ---: | ---: | --- | --- |
+| 165 | 14.10 | host → srv | 60649 | 239 | — | `initialize` | **sincronización** |
+| 171 | 14.47 | srv → host | 443 | 81 | 200 | resultado `id=1` | respuesta |
+| 185 | 14.66 | host → srv | 60650 | 130 | — | `notifications/initialized` | **sincronización** |
+| 187 | 14.86 | srv → host | 443 | 847 | 202 | *(sin cuerpo)* | acuse, no respuesta |
+| 202 | 15.04 | host → srv | 60651 | 134 | — | `tools/list` | solicitud |
+| 208 | 15.25 | srv → host | 443 | 1289 | 200 | resultado `id=2` | respuesta |
+| 222 | 15.38 | host → srv | 60652 | 194 | — | `tools/call` (`find_doctors`) | solicitud |
+| 228 | 15.82 | srv → host | 443 | 105 | 200 | resultado `id=3` | respuesta |
+| 241 | 15.95 | host → srv | 60653 | 215 | — | `tools/call` (`get_availability`) | solicitud |
+| 245 | 16.20 | srv → host | 443 | 81 | 200 | resultado `id=4` | respuesta |
+| 261 | 16.32 | host → srv | 60654 | 296 | — | `tools/call` (`book_appointment`) | solicitud |
+| 264 | 16.51 | srv → host | 443 | 105 | 200 | resultado `id=5` | respuesta |
+| 280 | 16.63 | host → srv | 60655 | 192 | — | `tools/call` (`get_appointment`) | solicitud |
+| 291 | 16.82 | srv → host | 443 | 81 | 200 | resultado `id=6` | respuesta |
+| 309 | 16.97 | host → srv | 60656 | 195 | — | `tools/call` (`cancel_appointment`) | solicitud |
+| 317 | 17.15 | srv → host | 443 | 81 | 200 | resultado `id=7` | respuesta |
+| 350 | 17.35 | host → srv | 60657 | 198 | — | `tools/call` (código inexistente) | solicitud |
+| 356 | 17.53 | srv → host | 443 | 81 | 200 | resultado `id=8`, `isError` | respuesta |
 
-```
-  #  dirección  clase         método                     rol
-  1  host->srv  request       initialize                 sincronización (abre la sesión, negocia la versión)
-  2  srv->host  response      initialize                 respuesta a initialize
-  3  host->srv  notification  notifications/initialized  sincronización (confirma que la sesión está viva)
-  4  host->srv  request       tools/list                 solicitud (descubrimiento)
-  5  srv->host  response      tools/list                 respuesta a tools/list
-  6  host->srv  request       tools/call                 solicitud (invocación)
-  7  srv->host  response      tools/call                 respuesta a tools/call
- ... (se repite el par solicitud/respuesta por cada herramienta invocada)
- 17  srv->host  response      tools/call                 respuesta a tools/call
-```
+**Las tres clases y cómo se reconocen**
 
-**Cómo se distinguen las tres clases**, tanto en el código como en Wireshark:
-
-| Clase | Cómo se reconoce en el JSON | Qué se ve en HTTP |
+| Clase | En el JSON | En la captura |
 | --- | --- | --- |
-| Sincronización | `initialize` con `id`; `notifications/initialized` sin `id` | `POST` que responde `200`; y `POST` que responde `202` sin cuerpo |
-| Solicitud | Tiene `method` **y** `id` | `POST /mcp` con el método en el cuerpo |
-| Respuesta | Tiene `id` y `result` (o `error`), sin `method` | Cuerpo del `200` que corresponde a ese `POST` |
+| Sincronización | `initialize` (con `id`) y `notifications/initialized` (sin `id`) | Las dos primeras peticiones; la segunda es la única que recibe `202` |
+| Solicitud | Tiene `method` **y** `id` | `POST /mcp` cuyo cuerpo lleva el nombre del método |
+| Respuesta | Tiene `id` y `result` o `error`, sin `method` | Cuerpo del `200` que corresponde a ese `POST` |
 
 La distinción está implementada en `mcp_host/jsonrpc.py`, en la función
-`classify()`: si el mensaje trae `method` es solicitud cuando tiene `id` y
+`classify()`: si el mensaje trae `method`, es solicitud cuando tiene `id` y
 notificación cuando no; si no trae `method`, es respuesta, y es error cuando
 lleva el miembro `error`. La misma función alimenta el log del chatbot y la
 tabla de arriba.
 
-El detalle importante para la captura: **la notificación es el único mensaje sin
-respuesta**. En el enmarcado HTTP eso se ve como el único `POST` que devuelve
-`202` con `Content-Length: 0`, mientras que todos los demás devuelven `200` con
-cuerpo. Es la evidencia visual más limpia de que JSON-RPC distingue entre
-solicitudes y notificaciones.
+**La evidencia más limpia está en la trama 185.** Es el único mensaje sin
+respuesta en toda la sesión, y el servidor contesta `202 Accepted` con
+`Content-Length: 0`. Todos los demás reciben `200` con cuerpo. Ahí se ve, a
+nivel de red, la diferencia que JSON-RPC hace entre una notificación y una
+solicitud: la notificación no lleva `id`, así que no hay a qué responder.
 
-### Qué ocurre en cada capa 
+Verificado en texto plano en la captura local, donde el cuerpo se lee sin
+descifrar:
 
-*Esta sección se completa con los valores de tu captura; la estructura y lo que
-hay que buscar en cada capa es lo que sigue.*
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{...}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+```
 
-**Capa de enlace (Ethernet / IEEE 802.11).** Cada paquete viaja dentro de una
-trama con MAC de origen y destino. Si la captura es contra `127.0.0.1`, no hay
-trama real: Windows usa la interfaz de bucle invertido (Npcap "Adapter for
-loopback traffic") y Wireshark muestra un encabezado nulo, porque el paquete
-nunca sale de la máquina. Contra el servidor remoto sí hay trama: la MAC de
-destino **no** es la del servidor en Render, sino la del router de salida, ya
-que la dirección de enlace solo tiene alcance dentro del segmento local. El MTU
-típico de 1500 bytes es lo que obliga a fragmentar las respuestas grandes, como
-la de `tools/list`.
+### Qué ocurre en cada capa
 
-**Capa de red (IP).** Direcciones IP de origen y destino, y el campo TTL. Contra
-el servidor local ambas son `127.0.0.1`. Contra Render, el destino es la IP
-pública que resuelve el DNS de `onrender.com` — conviene notar que Render está
-detrás de un balanceador, así que la IP que se ve no es la del contenedor. El
-TTL decreciente evidencia los saltos intermedios. Aquí no hay noción de
-"sesión": IP solo entrega paquetes sueltos.
+**Capa de enlace (Ethernet / IEEE 802.11).** En la captura remota cada paquete
+viaja en una trama Ethernet con la MAC de la computadora,
+`a8:e2:91:e0:1e:8e`, y la del router, `18:34:af:86:fe:8e`. Vale la pena notar
+que **la MAC de destino no es la del servidor en Render**: la dirección de
+enlace solo tiene alcance dentro del segmento local, así que el destino es
+siempre la puerta de enlace. Los tamaños de trama van de 54 bytes (un `ACK`
+puro) a 1514, que es exactamente el MTU de 1500 más los 14 bytes de cabecera
+Ethernet.
 
-**Capa de transporte (TCP).** Es donde aparece la sesión. La captura debe
-mostrar el saludo de tres vías (`SYN`, `SYN-ACK`, `ACK`) **una sola vez**,
-aunque la sesión MCP intercambie 17 mensajes: el servidor usa HTTP/1.1 con
-`keep-alive`, así que todos los mensajes viajan sobre la misma conexión TCP. Eso
-se comprueba viendo que el puerto efímero de origen no cambia entre un `POST` y
-el siguiente. Se observan además los `ACK` de cada segmento, la ventana de
-recepción, y al final el cierre con `FIN`/`ACK`. El puerto de destino identifica
-el servicio: 8000 en local, 443 en Render.
+En la captura local no hay trama real: Wireshark reporta el tipo de enlace como
+`null` porque el tráfico usa la interfaz de bucle invertido y nunca sale de la
+máquina. Es una diferencia útil de señalar: la capa de enlace solo existe cuando
+hay un medio físico que atravesar.
 
-**Capa de aplicación (HTTP + JSON-RPC).** Dos protocolos apilados, y conviene
-nombrarlos por separado porque es la idea central del proyecto:
+**Capa de red (IP).** La computadora usa la dirección privada `192.168.1.50` y
+el servidor la pública `216.24.57.7`. El DNS de `clinic-mcp-server.onrender.com`
+devuelve dos direcciones (`216.24.57.7` y `216.24.57.15`) porque Render
+distribuye la carga; la sesión se estableció con la primera. El TTL delata la
+distancia: los paquetes salientes llevan 128, el valor inicial de Windows,
+mientras que los que regresan llegan con 53 y 57, es decir que atravesaron
+alrededor de una decena de saltos. En la captura local ambas direcciones son
+`127.0.0.1` y el TTL no se decrementa, porque no hay routers de por medio.
 
-- *HTTP* aporta el enmarcado: método `POST`, ruta `/mcp`, `Content-Type:
-  application/json`, `Content-Length`, y el código de estado.
+**Capa de transporte (TCP).** Aquí apareció el hallazgo más interesante, y
+contradice lo que esperábamos. La sesión MCP intercambia 17 mensajes, y la
+suposición razonable era que viajaran todos sobre una sola conexión TCP, ya que
+el servidor habla HTTP/1.1 con `keep-alive`. **La captura demuestra lo
+contrario: hay 9 paquetes `SYN`, es decir 9 conexiones TCP distintas**, una por
+cada mensaje que espera respuesta. Se comprueba en el puerto efímero de origen,
+que cambia en cada petición: 60649, 60650, 60651… hasta 60657. La captura local
+muestra el mismo patrón con los puertos 63799 a 63807.
+
+La causa está en el cliente, no en el servidor: `HttpTransport` usa
+`urllib.request`, que no mantiene un pool de conexiones y envía
+`Connection: close` en cada petición. El servidor ofrece reutilizar la conexión
+y el cliente decide no hacerlo. Es un buen recordatorio de que `keep-alive` es
+una negociación entre dos partes, y basta con que una la rechace para que no
+ocurra.
+
+Cada conexión negocia MSS de 1460 bytes y ventana inicial de 65535. El cierre
+también es consistente con esa lectura: los 9 `FIN` los envía **el servidor**
+`216.24.57.7`, no el cliente, porque es el cliente quien pidió `Connection:
+close` y el servidor obedece cerrando en cuanto termina de responder. La
+computadora contesta con 9 `RST`, que es como la pila de Windows finaliza un
+socket ya cerrado en lugar de completar el apagado ordenado. El puerto de
+destino identifica el servicio: 443 en Render, 8000 en local.
+
+**Capa de aplicación (TLS + HTTP + JSON-RPC).** Sobre la conexión remota hay
+tres protocolos apilados, y conviene nombrarlos por separado porque es la idea
+central del proyecto:
+
+- *TLS 1.3* cifra el canal. En el `Client Hello` se ve la extensión SNI con el
+  nombre `clinic-mcp-server.onrender.com`, que es lo que permite a Render saber
+  qué certificado presentar antes de que exista el túnel. La suite negociada es
+  `0x1302`, es decir `TLS_AES_256_GCM_SHA384`.
+- *HTTP/1.1* aporta el enmarcado: `POST /mcp`, `Content-Type: application/json`,
+  `Content-Length`, y el código de estado que distingue respuesta de acuse.
 - *JSON-RPC 2.0* es el contenido: `jsonrpc`, `id`, `method`, `params`, `result`.
-- *MCP* no es un protocolo de red aparte; es el vocabulario de métodos
-  (`initialize`, `tools/list`, `tools/call`) acordado sobre JSON-RPC.
+- *MCP* no es un protocolo de red aparte. Es el vocabulario de métodos
+  (`initialize`, `tools/list`, `tools/call`) acordado sobre JSON-RPC. En la
+  captura no hay nada que diga "MCP": lo que se ve son mensajes JSON-RPC cuyos
+  nombres de método pertenecen a ese vocabulario.
 
-En la captura local, `Follow > HTTP Stream` muestra el JSON completo en texto
-plano. Contra Render el tráfico va sobre TLS: se verá el handshake
-(`Client Hello`, `Server Hello`, certificado) y luego `Application Data`
-cifrado. Para leer el JSON hay que descifrarlo, definiendo la variable de
-entorno `SSLKEYLOGFILE` antes de correr el script y apuntando Wireshark a ese
-archivo en *Preferences > Protocols > TLS > (Pre)-Master-Secret log filename*.
+El tamaño de las respuestas cuenta su propia historia. La de `tools/list` ocupa
+1289 bytes porque lleva los esquemas JSON de las seis herramientas, mientras que
+la mayoría de las respuestas a `tools/call` caben en 81 bytes. Es el precio del
+descubrimiento: se paga una vez al abrir la sesión y ya no se vuelve a pagar.
+
+La sesión completa, desde el `initialize` hasta la última respuesta, tomó
+**3.4 segundos** contra el servidor en Render. Contra el servidor local, los
+mismos 17 mensajes tomaron **56 milisegundos**. Casi toda esa diferencia es
+latencia de red y establecimiento de TLS, no procesamiento: el servidor hace
+exactamente el mismo trabajo en ambos casos.
 
 ---
 
