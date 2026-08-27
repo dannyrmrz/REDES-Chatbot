@@ -38,6 +38,7 @@ implements the Gemini API, not MCP. Swapping the LLM provider touches one module
 | `mcp_host/server_registry.py` | Runs several MCP servers at once and merges their tools into one catalogue |
 | `mcp_host/chat_engine.py` | LLM connection, session context, tool-use loop and schema translation |
 | `cli.py` | Terminal chatbot |
+| `web/` | Web chatbot: a second frontend on the very same engine |
 | `clinic_server/` | Our own MCP server: clinic appointments, the server half of the protocol |
 
 ### The MCP handshake, as implemented
@@ -50,11 +51,29 @@ implements the Gemini API, not MCP. Swapping the LLM provider touches one module
 | 4 | `tools/list` | request → | discover the available tools and their JSON schemas |
 | 5 | `tools/call` | request → | run a tool with arguments and read back its content |
 
+## Implemented features
+
+| # | Feature | Where |
+| --- | --- | --- |
+| 1 | Connection to an LLM through its API | [`mcp_host/chat_engine.py`](mcp_host/chat_engine.py) |
+| 2 | Session context kept across turns | same file: the history travels with every request |
+| 3 | Log of every request and response with the MCP servers | [`mcp_host/interaction_log.py`](mcp_host/interaction_log.py), `/log` in the CLI, right pane on the web |
+| 4 | Official Filesystem and Git MCP servers | [`config/servers.json`](config/servers.json) + [`mcp_host/server_registry.py`](mcp_host/server_registry.py) |
+| 5 | Own MCP server, local, with its specification | [`clinic_server/`](clinic_server) + [docs/clinic-server.md](docs/clinic-server.md) |
+| 6 | The same server, running remotely | [`clinic_server/http_server.py`](clinic_server/http_server.py) + [`render.yaml`](render.yaml) |
+| 7 | Wireshark analysis of host ↔ remote server | [`scripts/capture_session.py`](scripts/capture_session.py) + [docs/report.md](docs/report.md) |
+| 8–10 | Specification, layer analysis and conclusions | [docs/report.md](docs/report.md) |
+| Extra | Web UI applying HCI criteria | [`web/`](web) |
+
+The protocol itself is hand-written: `jsonrpc.py`, `transport.py` and
+`mcp_client.py` import nothing but the standard library.
+
 ## Requirements
 
 - Python 3.11 or newer
-- Node.js 18 or newer — only to run the official MCP servers through `npx`
+- Node.js 18 or newer
 - A Gemini API key (free tier, no card needed)
+- Wireshark
 
 ## Installation
 
@@ -75,11 +94,6 @@ python scripts/init_workspace.py          # create the demo sandbox
 `requirements-servers.txt` is kept separate on purpose: those packages are the
 official servers we talk to, not part of this implementation. The Filesystem
 server needs no install, `npx` downloads it the first time the chatbot starts.
-
-Get the API key at <https://aistudio.google.com/apikey>: sign in with a Google
-account, accept the terms and click *Create API key*. The free tier covers this
-project and asks for no credit card. `.env` is ignored by git, so the key never
-reaches the repository.
 
 ## Usage
 
@@ -111,8 +125,18 @@ You: When was he born?
 Assistant: He was born on 23 June 1912 in London.
 ```
 
-The model defaults to `gemini-3.7-flash`, which the free tier covers; set
-`GEMINI_MODEL` in `.env` to use another one.
+The model defaults to `gemini-3.6-flash`, which the free tier covers; set
+`GEMINI_MODEL` in `.env` to use another one. If a model reports "high demand"
+(HTTP 503), `gemini-3.5-flash` is a reliable alternative.
+
+### Web interface
+
+```powershell
+python -m web.app          # then open http://127.0.0.1:5000
+```
+
+The layout puts the conversation on the left, where reading starts, and the MCP
+log on the right, with every JSON-RPC message labelled by class (request, response, notification) as it arrives. Because a turn can take the better part of a minute when the model is busy, the page polls the log while it waits and names the tool being used, instead of showing a silent spinner.
 
 ### MCP servers
 
@@ -127,13 +151,13 @@ change.
 | --- | --- | --- |
 | Filesystem (official) | `npx -y @modelcontextprotocol/server-filesystem ./workspace` | 14 |
 | Git (official) | `python -m mcp_server_git` | 12 |
-| Clinic (ours) | `python -m clinic_server` | 6 |
-| Clinic remote (ours) | Render web service over HTTP | 6 |
+| Clinic | `python -m clinic_server` | 6 |
+| Clinic remote | Render web service over HTTP | 6 |
 
 The two official ones are sandboxed to `workspace/`, which git ignores, so the
 chatbot can never touch this repository.
 
-### Clinic server (ours)
+### Clinic server
 
 An industry use case: booking appointments at a medical clinic. It publishes six
 tools — `list_specialties`, `find_doctors`, `get_availability`, `book_appointment`,
@@ -141,7 +165,7 @@ tools — `list_specialties`, `find_doctors`, `get_availability`, `book_appointm
 official servers, because it implements the same hand-written protocol.
 
 ```
-You: Necesito una cita con un pediatra el 20 de agosto por la manana
+You: Necesito una cita con un pediatra el 20 de agosto por la mañana
 
   [tool] clinic__find_doctors {"specialty": "pediatrics"}
   [tool] clinic__get_availability {"doctor_id": "doc-004", "date": "2026-08-20"}
@@ -222,33 +246,13 @@ Assistant: I created README.md, staged it and committed it as 75a7b4d.
 `scripts/init_workspace.py`. Everything after that — writing files, staging,
 committing, reading the log — goes through the MCP servers.
 
-### MCP smoke test
-
-This proves the hand-written client against a real official MCP server:
-
-```powershell
-python scripts/smoke_stdio.py
-```
-
-It downloads Anthropic's Filesystem MCP server with `npx`, performs the handshake over
-stdio, lists the 14 tools it publishes, calls `list_directory`, and prints the full
-interaction log. Expected output:
-
-```
-Connected to secure-filesystem-server 0.2.0 (protocol 2025-06-18)
-Tools exposed: 14 -> read_file, read_text_file, read_media_file, ...
-
-list_directory -> [FILE] hello.txt
-
---- MCP interaction log (7/7 messages) ---
-[19:20:24.421] --> filesystem   request      initialize (id=1)
-    {"jsonrpc":"2.0","id":1,"method":"initialize", ...
-```
 
 ## Project layout
 
 ```
 cli.py             terminal chatbot
+web/               web chatbot
+docs/              server specification and the final report
 clinic_server/     our own MCP server (clinic appointments, stdio and http)
 config/            MCP server declarations
 render.yaml        blueprint that deploys the clinic server to Render

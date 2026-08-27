@@ -13,8 +13,10 @@ from .interaction_log import InteractionLog
 from .mcp_client import MCPClient
 from .server_registry import ServerRegistry
 
-#: Model used unless GEMINI_MODEL says otherwise. Available on the free tier.
-DEFAULT_MODEL = "gemini-3.7-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
+
+#: Give up rather than hang forever when the model is overloaded.
+REQUEST_TIMEOUT_MS = 120_000
 
 #: Upper bound for one answer; it is a cap, not a cost.
 MAX_OUTPUT_TOKENS = 8192
@@ -79,7 +81,7 @@ class ChatEngine:
     def __init__(self, log: InteractionLog, registry: ServerRegistry | None = None,
                  model: str | None = None, system: str = SYSTEM_PROMPT) -> None:
         # The SDK reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment.
-        self.client = genai.Client()
+        self.client = genai.Client(http_options={"timeout": REQUEST_TIMEOUT_MS})
         self.model = model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
         # A model has no clock. Without today's date it reads "21 August" as a
         # date in its training past and books appointments in the wrong year.

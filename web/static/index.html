@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Chatbot — CC3067 Redes</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Visibility of system status: what is connected, at a glance. -->
+  <header class="bar">
+    <div class="brand">
+      <span class="dot" id="health" aria-hidden="true"></span>
+      <h1>MCP Chatbot</h1>
+      <span class="subtitle">Anfitrión del protocolo Model Context Protocol</span>
+    </div>
+    <div class="status" id="servers" aria-live="polite">
+      <span class="chip chip--muted">Conectando…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- Primary column: the conversation. -->
+    <section class="panel panel--chat" aria-labelledby="chat-title">
+      <h2 id="chat-title" class="panel__title">Conversación</h2>
+
+      <div class="messages" id="messages" role="log" aria-live="polite"></div>
+
+      <!-- Recognition over recall: show what the chatbot can actually do. -->
+      <div class="suggestions" id="suggestions">
+        <button type="button" class="suggestion">¿Qué especialidades ofrece la clínica?</button>
+        <button type="button" class="suggestion">Agenda una cita con un pediatra para mañana a las 9am a nombre de Ana López</button>
+        <button type="button" class="suggestion">Crea un README en workspace/demo-repo, agrégalo y haz commit</button>
+      </div>
+
+      <form class="composer" id="composer">
+        <label class="sr-only" for="input">Escribe tu mensaje</label>
+        <textarea id="input" rows="1" placeholder="Escribe tu mensaje…  (Enter para enviar, Shift+Enter para salto de línea)" autocomplete="off"></textarea>
+        <button type="submit" id="send" class="btn btn--primary">Enviar</button>
+        <button type="button" id="reset" class="btn btn--ghost" title="Olvida el contexto de la conversación">Reiniciar</button>
+      </form>
+    </section>
+
+    <!-- Secondary column: requirement 3, the MCP log, made visible. -->
+    <aside class="panel panel--log" aria-labelledby="log-title">
+      <div class="panel__head">
+        <h2 id="log-title" class="panel__title">Log MCP</h2>
+        <span class="counter" id="log-count">0 mensajes</span>
+      </div>
+      <p class="hint">Cada mensaje JSON-RPC 2.0 intercambiado con los servidores.</p>
+      <div class="log" id="log" role="log" aria-live="polite"></div>
+    </aside>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

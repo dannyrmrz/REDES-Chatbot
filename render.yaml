@@ -4,7 +4,9 @@ services:
     runtime: python
     plan: free
     region: oregon
-    # The server only uses the standard library, so there is nothing to install.
-    buildCommand: python --version
+    # The server itself only uses the standard library, but it imports the
+    # mcp_host package for the JSON-RPC layer, and importing that package pulls
+    # in the LLM SDK. Installing the requirements keeps the import chain happy.
+    buildCommand: pip install -r requirements.txt
     startCommand: python -m clinic_server.http_server
     healthCheckPath: /health

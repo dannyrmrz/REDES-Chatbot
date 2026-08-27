@@ -1,0 +1,188 @@
+:root {
+  --bg: #f4f7fa;
+  --surface: #ffffff;
+  --ink: #10202e;
+  --ink-soft: #4a6072;
+  --ink-faint: #7b8fa1;
+  --line: #dbe4ec;
+
+  --brand: #1d6a8c;          /* trust, calm, clinical */
+  --brand-strong: #14506b;
+  --brand-wash: #e7f1f6;
+
+  --ok: #1f7a4d;             /* confirmed */
+  --busy: #a86a12;           /* working */
+  --error: #b3261e;          /* failure only */
+
+  --radius: 10px;
+  --gap: 16px;
+  --shadow: 0 1px 2px rgba(16, 32, 46, .06), 0 4px 14px rgba(16, 32, 46, .06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- header ---------- */
+.bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--gap); flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
+.subtitle { color: var(--ink-faint); font-size: 13px; }
+
+.dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--ink-faint); align-self: center;
+}
+.dot--ok { background: var(--ok); }
+.dot--error { background: var(--error); }
+
+.status { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--brand-wash); color: var(--brand-strong);
+  border: 1px solid #cfe2eb; white-space: nowrap;
+}
+.chip--muted { background: #eef2f6; color: var(--ink-soft); border-color: var(--line); }
+.chip--error { background: #fdecea; color: var(--error); border-color: #f5c6c2; }
+
+/* ---------- layout ---------- */
+.layout {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--gap); padding: var(--gap);
+}
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; min-height: 0;
+}
+
+.panel__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px 0;
+}
+.panel__title {
+  font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-soft); margin: 0; padding: 14px 18px 0;
+}
+.panel__head .panel__title { padding: 0; }
+.counter { font-size: 12px; color: var(--ink-faint); }
+.hint { margin: 6px 18px 0; font-size: 12px; color: var(--ink-faint); }
+
+/* ---------- messages ---------- */
+.messages {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 14px 18px; display: flex; flex-direction: column; gap: 12px;
+}
+
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius); white-space: pre-wrap; word-wrap: break-word; }
+.msg--user { align-self: flex-end; background: var(--brand); color: #fff; border-bottom-right-radius: 3px; }
+.msg--bot { align-self: flex-start; background: #eef3f7; border-bottom-left-radius: 3px; }
+.msg--error { align-self: flex-start; background: #fdecea; color: var(--error); border: 1px solid #f5c6c2; }
+.msg--empty { align-self: center; color: var(--ink-faint); font-size: 14px; text-align: center; max-width: 46ch; }
+
+/* Tool activity: the model reaching into an MCP server, shown as it happens. */
+.tools { align-self: flex-start; display: flex; flex-direction: column; gap: 4px; max-width: 78%; }
+.tool {
+  font: 12px/1.4 "Cascadia Mono", Consolas, monospace;
+  background: #fdf7ec; border: 1px solid #f0e0c4; color: var(--busy);
+  padding: 6px 10px; border-radius: 8px; word-break: break-all;
+}
+.tool b { color: #7d4f0a; font-weight: 600; }
+
+.thinking { align-self: flex-start; color: var(--ink-soft); font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.thinking i { width: 7px; height: 7px; border-radius: 50%; background: var(--busy); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .thinking i { animation: none; opacity: .7; } }
+
+/* ---------- suggestions ---------- */
+.suggestions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 18px 4px; }
+.suggestion {
+  font: inherit; font-size: 13px; text-align: left;
+  background: var(--brand-wash); color: var(--brand-strong);
+  border: 1px solid #cfe2eb; border-radius: 999px;
+  padding: 8px 14px; cursor: pointer; max-width: 100%;
+}
+.suggestion:hover { background: #d8e9f1; }
+
+/* ---------- composer ---------- */
+.composer {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 12px 18px 16px; border-top: 1px solid var(--line);
+}
+
+textarea {
+  flex: 1; resize: none; font: inherit; color: var(--ink);
+  padding: 11px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: #fbfdfe; max-height: 160px; min-height: 44px;
+}
+textarea:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: var(--brand); }
+
+.btn {
+  font: inherit; font-weight: 600; min-height: 44px; padding: 0 18px;
+  border-radius: var(--radius); cursor: pointer; border: 1px solid transparent;
+}
+.btn--primary { background: var(--brand); color: #fff; }
+.btn--primary:hover { background: var(--brand-strong); }
+.btn--ghost { background: transparent; color: var(--ink-soft); border-color: var(--line); }
+.btn--ghost:hover { background: #eef2f6; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn:focus-visible, .suggestion:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ---------- MCP log ---------- */
+.log {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 10px 18px 16px;
+  font: 12px/1.5 "Cascadia Mono", Consolas, monospace;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.entry { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; }
+.entry--sent { border-left-color: var(--brand); }
+.entry--received { border-left-color: var(--ok); }
+
+.entry__head { display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; color: var(--ink-soft); }
+.arrow { font-weight: 700; }
+.entry--sent .arrow { color: var(--brand); }
+.entry--received .arrow { color: var(--ok); }
+.entry__method { color: var(--ink); font-weight: 600; }
+.entry__time { color: var(--ink-faint); }
+
+/* The three JSON-RPC message classes, told apart at a glance. */
+.kind { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding: 1px 6px; border-radius: 4px; }
+.kind--request { background: var(--brand-wash); color: var(--brand-strong); }
+.kind--response { background: #e6f4ec; color: var(--ok); }
+.kind--notification { background: #f3eefb; color: #5b3d8c; }
+.kind--error { background: #fdecea; color: var(--error); }
+
+.entry__payload { margin: 4px 0 0; color: var(--ink-soft); word-break: break-all; white-space: pre-wrap; }
+
+.log--empty { color: var(--ink-faint); font-family: "Segoe UI", system-ui, sans-serif; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; grid-template-rows: 1.4fr 1fr; }
+  .msg, .tools { max-width: 90%; }
+}
