@@ -81,11 +81,11 @@ que la otra no puede:
 
 | | Captura local | Captura remota |
 | --- | --- | --- |
-| Archivo | `captura-local.pcapng` | `captura-remota.pcapng` |
+| Archivo | `captura-local-mcp.pcapng` | `captura-remota.pcapng` |
 | Servidor | `127.0.0.1:8000` | `clinic-mcp-server.onrender.com:443` |
 | Interfaz | Adapter for loopback traffic capture | Wi-Fi |
 | Cifrado | Ninguno, el JSON se lee directo | TLS 1.3, descifrado con `SSLKEYLOGFILE` |
-| Tramas totales | 921 | 730 |
+| Tramas totales | 133 (filtradas de 921) | 730 |
 | Qué aporta | El JSON-RPC en texto plano | La ruta de red real: MAC, IP pública, TTL |
 
 ### Cómo se reprodujo
